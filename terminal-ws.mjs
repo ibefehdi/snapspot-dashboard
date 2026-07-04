@@ -13,11 +13,17 @@ if (process.platform === 'darwin') {
 
 const HOSTNAME_RE = /^[a-z0-9-]+$/
 const SSH_USER = process.env.SSH_USER ?? 'snapspot'
+const USE_TAILSCALE_SSH = process.env.USE_TAILSCALE_SSH !== 'false'
 
 const wss = new WebSocketServer({ noServer: true })
 
-function buildSshArgs(host) {
+function getTerminalCommand(host) {
+  if (USE_TAILSCALE_SSH) {
+    return ['tailscale', 'ssh', `${SSH_USER}@${host}`]
+  }
+
   const args = [
+    'ssh',
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=5',
     '-o', 'StrictHostKeyChecking=accept-new',
@@ -31,8 +37,8 @@ function buildSshArgs(host) {
 
 function attachPty(ws, host) {
   import('node-pty').then(({ spawn: ptySpawn }) => {
-    const sshArgs = ['ssh', ...buildSshArgs(host)]
-    const pty = ptySpawn(sshArgs[0], sshArgs.slice(1), {
+    const cmd = getTerminalCommand(host)
+    const pty = ptySpawn(cmd[0], cmd.slice(1), {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,

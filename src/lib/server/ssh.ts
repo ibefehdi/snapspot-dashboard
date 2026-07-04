@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, type SpawnOptions } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { assertValidHost, getConfig } from './config'
 
@@ -33,7 +33,11 @@ class Semaphore {
 
 const semaphore = new Semaphore(getConfig().SSH_CONCURRENCY)
 
-function buildSshArgs(host: string): string[] {
+function remoteTarget(host: string): string {
+  return `${getConfig().SSH_USER}@${host}`
+}
+
+function buildOpenSshArgs(host: string): string[] {
   const cfg = getConfig()
   const args = [
     '-o',
@@ -55,8 +59,16 @@ function buildSshArgs(host: string): string[] {
     )
   }
 
-  args.push(`${cfg.SSH_USER}@${host}`)
+  args.push(remoteTarget(host))
   return args
+}
+
+function spawnRemote(host: string, remoteArgs: string[], options: SpawnOptions) {
+  const cfg = getConfig()
+  if (cfg.USE_TAILSCALE_SSH) {
+    return spawn('tailscale', ['ssh', remoteTarget(host), ...remoteArgs], options)
+  }
+  return spawn('ssh', [...buildOpenSshArgs(host), ...remoteArgs], options)
 }
 
 export async function sshExec(host: string, remoteCommand: string): Promise<{ stdout: string; stderr: string; code: number }> {
@@ -65,8 +77,7 @@ export async function sshExec(host: string, remoteCommand: string): Promise<{ st
 
   try {
     return await new Promise((resolve, reject) => {
-      const args = [...buildSshArgs(host), remoteCommand]
-      const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const child = spawnRemote(host, [remoteCommand], { stdio: ['ignore', 'pipe', 'pipe'] })
 
       let stdout = ''
       let stderr = ''
@@ -105,8 +116,7 @@ export async function sshExecScript(host: string, script: string): Promise<{ std
 
   try {
     return await new Promise((resolve, reject) => {
-      const args = [...buildSshArgs(host), 'bash', '-s']
-      const child = spawn('ssh', args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      const child = spawnRemote(host, ['bash', '-s'], { stdio: ['pipe', 'pipe', 'pipe'] })
 
       let stdout = ''
       let stderr = ''
@@ -144,7 +154,11 @@ export async function sshExecScript(host: string, script: string): Promise<{ std
 
 export function getSshCommand(host: string): string[] {
   assertValidHost(host)
-  return ['ssh', '-t', ...buildSshArgs(host)]
+  const cfg = getConfig()
+  if (cfg.USE_TAILSCALE_SSH) {
+    return ['tailscale', 'ssh', remoteTarget(host)]
+  }
+  return ['ssh', '-t', ...buildOpenSshArgs(host)]
 }
 
 export async function sshStream(
@@ -156,8 +170,7 @@ export async function sshStream(
   const release = await semaphore.acquire()
 
   return new Promise((resolve, reject) => {
-    const args = [...buildSshArgs(host), remoteCommand]
-    const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawnRemote(host, [remoteCommand], { stdio: ['ignore', 'pipe', 'pipe'] })
 
     let settled = false
     let stderr = ''

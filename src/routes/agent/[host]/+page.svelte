@@ -7,8 +7,8 @@
   import Sparkline from '$lib/components/Sparkline.svelte'
   import UptimeBar from '$lib/components/UptimeBar.svelte'
   import LogsPanel from '$lib/components/LogsPanel.svelte'
-  import Terminal from '$lib/components/Terminal.svelte'
   import CameraPeek from '$lib/components/CameraPeek.svelte'
+  import type { Component } from 'svelte'
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte'
   import {
     formatElapsed,
@@ -28,6 +28,15 @@
   let actionMessage = $state<string | null>(null)
   let actionError = $state<string | null>(null)
   let tab = $state<'overview' | 'terminal'>('overview')
+  let Terminal = $state<Component<{ host: string }> | null>(null)
+
+  async function showTerminal() {
+    tab = 'terminal'
+    if (!Terminal) {
+      const mod = await import('$lib/components/Terminal.svelte')
+      Terminal = mod.default
+    }
+  }
   let vitalsSamples = $state<VitalsSample[]>([])
   let uptimePct = $state(100)
   let uptimeSegments = $state<UptimeSegment[]>([])
@@ -127,7 +136,7 @@
     <button
       type="button"
       class="px-4 py-2 text-sm {tab === 'terminal' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400'}"
-      onclick={() => tab = 'terminal'}
+      onclick={() => void showTerminal()}
     >SSH Terminal</button>
   </div>
 
@@ -210,8 +219,10 @@
     </div>
 
     <CameraPeek {host} bind:open={cameraOpen} />
-  {:else}
+  {:else if Terminal}
     <Terminal {host} />
+  {:else}
+    <p class="text-gray-500">Loading terminal…</p>
   {/if}
 
   <LogsPanel {host} bind:open={logsOpen} />

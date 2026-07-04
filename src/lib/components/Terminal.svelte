@@ -1,8 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { FitAddon } from '@xterm/addon-fit'
-  import { Terminal } from '@xterm/xterm'
-  import '@xterm/xterm/css/xterm.css'
 
   let { host }: { host: string } = $props()
 
@@ -10,7 +7,13 @@
   let connected = $state(false)
   let error = $state<string | null>(null)
 
-  onMount(() => {
+  onMount(async () => {
+    const [{ FitAddon }, { Terminal }] = await Promise.all([
+      import('@xterm/addon-fit'),
+      import('@xterm/xterm'),
+    ])
+    await import('@xterm/xterm/css/xterm.css')
+
     const term = new Terminal({
       cursorBlink: true,
       theme: {

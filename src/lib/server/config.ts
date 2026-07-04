@@ -9,6 +9,10 @@ const envSchema = z.object({
     .string()
     .default('true')
     .transform(v => v === 'true' || v === '1'),
+  USE_TAILSCALE_SSH: z
+    .string()
+    .default('true')
+    .transform(v => v === 'true' || v === '1'),
   SSH_TIMEOUT_MS: z.coerce.number().default(10000),
   POLL_TAILSCALE_MS: z.coerce.number().default(15000),
   POLL_AGENT_MS: z.coerce.number().default(30000),

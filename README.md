@@ -6,10 +6,12 @@ Self-hosted monitoring dashboard for SnapSpot photobooth agents on a Tailscale n
 
 - Node.js 20.x
 - [Tailscale](https://tailscale.com/) installed on the dashboard server and joined to the same tailnet as agents
-- SSH access to agents tagged `tag:snapspot` (Tailscale SSH: `tailscale ssh snapspot@<hostname>`)
+- SSH access to agents tagged `tag:snapspot` via **Tailscale SSH** (default) or OpenSSH keys
 - Build tools for native modules (`node-pty`, `better-sqlite3`) — Linux/macOS recommended for production
 
 ## Quick start
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for the full guide (Tailscale → SSH → systemd → Tailscale Serve).
 
 ```bash
 cd dashboard
@@ -31,6 +33,7 @@ Production uses `server.js`, which wraps the SvelteKit handler and adds WebSocke
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `3000` | HTTP port |
 | `SSH_USER` | `snapspot` | SSH user on agents |
+| `USE_TAILSCALE_SSH` | `true` | Use `tailscale ssh` (no keys); set `false` for OpenSSH |
 | `SSH_CONCURRENCY` | `15` | Max parallel SSH probes |
 | `SSH_USE_CONTROL_MASTER` | `true` | OpenSSH connection multiplexing (disable on Windows dev) |
 | `SSH_TIMEOUT_MS` | `10000` | SSH command timeout |
@@ -77,11 +80,11 @@ sqlite3 data/snapdash.db ".backup 'snapdash-backup.db'"
 
 ## Security
 
-No app-level auth in v1 — bind to the tailnet interface only. For production, use `tailscale serve` to add Tailscale identity headers:
+The dashboard has no built-in login. For public internet access, put nginx in front with **HTTPS + basic auth** (see [DEPLOYMENT.md](./DEPLOYMENT.md) section 7).
 
-```bash
-tailscale serve --bg --https=443 http://127.0.0.1:3000
-```
+- Bind the app to `127.0.0.1:3000` — only nginx faces the internet.
+- The VPS stays on Tailscale to reach agents; users do not need Tailscale.
+- The in-browser SSH terminal connects through the VPS to agents via `tailscale ssh`.
 
 ## systemd unit example
 
