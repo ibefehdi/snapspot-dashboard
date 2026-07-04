@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { PassThrough } from 'node:stream'
 import { assertValidHost, getConfig } from './config'
 
 class Semaphore {
@@ -144,4 +145,73 @@ export async function sshExecScript(host: string, script: string): Promise<{ std
 export function getSshCommand(host: string): string[] {
   assertValidHost(host)
   return ['ssh', '-t', ...buildSshArgs(host)]
+}
+
+export async function sshStream(
+  host: string,
+  remoteCommand: string,
+  signal?: AbortSignal,
+): Promise<PassThrough> {
+  assertValidHost(host)
+  const release = await semaphore.acquire()
+
+  return new Promise((resolve, reject) => {
+    const args = [...buildSshArgs(host), remoteCommand]
+    const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+
+    let settled = false
+    let stderr = ''
+
+    const cleanup = () => {
+      child.kill('SIGTERM')
+      release()
+    }
+
+    signal?.addEventListener('abort', cleanup, { once: true })
+
+    const failTimer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error(`SSH stream to ${host} timed out after ${getConfig().SSH_TIMEOUT_MS}ms`))
+    }, getConfig().SSH_TIMEOUT_MS)
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+
+    child.stdout.once('data', (chunk: Buffer) => {
+      if (settled) return
+      settled = true
+      clearTimeout(failTimer)
+
+      const passthrough = new PassThrough()
+      passthrough.write(chunk)
+      child.stdout.pipe(passthrough)
+
+      child.on('close', () => {
+        passthrough.end()
+        release()
+        signal?.removeEventListener('abort', cleanup)
+      })
+
+      resolve(passthrough)
+    })
+
+    child.on('close', (code) => {
+      clearTimeout(failTimer)
+      if (settled) return
+      settled = true
+      release()
+      reject(new Error(stderr.trim() || `SSH stream to ${host} exited with code ${code}`))
+    })
+
+    child.on('error', (err) => {
+      clearTimeout(failTimer)
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(err)
+    })
+  })
 }

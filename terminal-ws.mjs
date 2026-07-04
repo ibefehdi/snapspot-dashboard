@@ -1,4 +1,15 @@
+import { chmodSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { WebSocketServer } from 'ws'
+
+// node-pty 1.1.0 ships spawn-helper without the exec bit on macOS (microsoft/node-pty#850).
+if (process.platform === 'darwin') {
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+  const helper = join(process.cwd(), 'node_modules/node-pty/prebuilds', `darwin-${arch}`, 'spawn-helper')
+  if (existsSync(helper)) {
+    try { chmodSync(helper, 0o755) } catch { /* best effort */ }
+  }
+}
 
 const HOSTNAME_RE = /^[a-z0-9-]+$/
 const SSH_USER = process.env.SSH_USER ?? 'snapspot'

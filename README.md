@@ -1,13 +1,13 @@
 # SnapSpot Fleet Dashboard
 
-Self-hosted monitoring dashboard for SnapSpot photobooth agents on a Tailscale network. Discovers agents via Tailscale, monitors them agentlessly over SSH, and provides fleet status, journey tracking, logs, remote actions, camera peek, alerting, and ClickHouse history.
+Self-hosted monitoring dashboard for SnapSpot photobooth agents on a Tailscale network. Discovers agents via Tailscale, monitors them agentlessly over SSH, and provides fleet status, journey tracking, logs, remote actions, camera peek, alerting, and local SQLite history.
 
 ## Prerequisites
 
 - Node.js 20.x
 - [Tailscale](https://tailscale.com/) installed on the dashboard server and joined to the same tailnet as agents
 - SSH access to agents tagged `tag:snapspot` (Tailscale SSH: `tailscale ssh snapspot@<hostname>`)
-- Build tools for `node-pty` native module (Linux/macOS recommended for production)
+- Build tools for native modules (`node-pty`, `better-sqlite3`) — Linux/macOS recommended for production
 
 ## Quick start
 
@@ -47,11 +47,8 @@ Production uses `server.js`, which wraps the SvelteKit handler and adds WebSocke
 | `ALERT_APP_DOWN_MIN` | `2` | Minutes app down before alert |
 | `ALERT_ERROR_STREAK` | `3` | Consecutive failed journeys before alert |
 | `ALERT_CPU_TEMP_C` | `80` | CPU temp threshold (°C) |
-| `CLICKHOUSE_URL` | — | ClickHouse endpoint (optional) |
-| `CLICKHOUSE_USER` | — | ClickHouse username |
-| `CLICKHOUSE_PASSWORD` | — | ClickHouse password |
-| `CLICKHOUSE_DATABASE` | `default` | Database name |
-| `CLICKHOUSE_TABLE` | `app_logs_etl` | Log table name |
+| `SQLITE_PATH` | `./data/snapdash.db` | Local SQLite database path |
+| `HISTORY_RETENTION_DAYS` | `90` | Days of history to retain |
 
 ## Features
 
@@ -59,9 +56,24 @@ Production uses `server.js`, which wraps the SvelteKit handler and adds WebSocke
 - **One-button logs**: last 5/50 app log entries or journalctl output
 - **SSH terminal**: in-browser xterm.js session via WebSocket + Tailscale SSH
 - **Remote actions**: restart app, restart ustreamer, reboot (with typed confirmation)
-- **Camera peek**: MJPEG proxy from ustreamer `:8081/stream`
-- **Alerts**: ntfy/Telegram for offline, app down, error streaks, high CPU temp
-- **History**: fleet-wide ClickHouse charts (journeys/day, step success rates, top errors)
+- **Camera peek**: MJPEG proxy from ustreamer (direct or via SSH tunnel)
+- **Alerts**: ntfy/Telegram for offline, app down, error streaks, high CPU temp (persisted in SQLite)
+- **History**: fleet-wide charts (journeys/day, step success rates, top errors, version rollout)
+- **Journey explorer**: browse individual journeys with per-step breakdown
+- **Log search**: full-text search across ingested fleet logs
+- **Vitals sparklines**: 24h CPU/memory/disk trends per agent
+- **Uptime timeline**: 7-day availability bar per agent
+- **CSV export**: download journeys, errors, or vitals history
+
+## Local history database
+
+History is stored in a local SQLite file (`SQLITE_PATH`). Data is ingested automatically during agent SSH probes — no external database or Vector pipeline required. History builds up from first run; allow a few probe cycles before charts populate.
+
+Back up the database:
+
+```bash
+sqlite3 data/snapdash.db ".backup 'snapdash-backup.db'"
+```
 
 ## Security
 
@@ -106,4 +118,4 @@ Set `SSH_USE_CONTROL_MASTER=false` in `.env` — OpenSSH ControlMaster sockets r
 npm test
 ```
 
-Unit tests cover journey step inference from log events.
+Unit tests cover journey step inference, log ingestion deduplication, and history queries.

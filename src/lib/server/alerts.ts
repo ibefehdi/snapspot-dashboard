@@ -1,5 +1,6 @@
 import type { AgentState, AlertRecord } from '$lib/types'
 import { getConfig } from './config'
+import { getDb } from './db'
 
 const recentAlerts: AlertRecord[] = []
 const alertCooldown = new Map<string, number>()
@@ -62,6 +63,16 @@ function recordAlert(alert: AlertRecord) {
   recentAlerts.unshift(alert)
   if (recentAlerts.length > 100) {
     recentAlerts.pop()
+  }
+
+  try {
+    getDb().prepare(`
+      INSERT OR REPLACE INTO alerts (id, host, rule, message, severity, at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(alert.id, alert.host, alert.rule, alert.message, alert.severity, alert.at)
+  }
+  catch {
+    // DB may not be initialized in tests
   }
 }
 
@@ -174,6 +185,22 @@ export async function evaluateAlerts(prev: AgentState | null, current: AgentStat
   }
 }
 
-export function getRecentAlerts(): AlertRecord[] {
+export function getRecentAlerts(limit = 100): AlertRecord[] {
+  try {
+    const rows = getDb().prepare(`
+      SELECT id, host, rule, message, severity, at
+      FROM alerts
+      ORDER BY at DESC
+      LIMIT ?
+    `).all(limit) as AlertRecord[]
+
+    if (rows.length > 0) {
+      return rows
+    }
+  }
+  catch {
+    // fall through to in-memory buffer
+  }
+
   return [...recentAlerts]
 }

@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
-  import type { AgentState } from '$lib/types'
+  import type { AgentState, UptimeSegment, VitalsSample } from '$lib/types'
   import StepIndicator from '$lib/components/StepIndicator.svelte'
   import VitalsBar from '$lib/components/VitalsBar.svelte'
+  import Sparkline from '$lib/components/Sparkline.svelte'
+  import UptimeBar from '$lib/components/UptimeBar.svelte'
   import LogsPanel from '$lib/components/LogsPanel.svelte'
   import Terminal from '$lib/components/Terminal.svelte'
   import CameraPeek from '$lib/components/CameraPeek.svelte'
@@ -16,7 +18,7 @@
     truncateId,
   } from '$lib/utils'
 
-  const host = $derived($page.params.host)
+  const host = $derived($page.params.host!)
 
   let agent = $state<AgentState | null>(null)
   let fleetVersion = $state<string | null>(null)
@@ -26,6 +28,25 @@
   let actionMessage = $state<string | null>(null)
   let actionError = $state<string | null>(null)
   let tab = $state<'overview' | 'terminal'>('overview')
+  let vitalsSamples = $state<VitalsSample[]>([])
+  let uptimePct = $state(100)
+  let uptimeSegments = $state<UptimeSegment[]>([])
+
+  async function loadHistory() {
+    const [vitalsRes, uptimeRes] = await Promise.all([
+      fetch(`/api/agents/${host}/vitals?hours=24`),
+      fetch(`/api/agents/${host}/uptime?days=7`),
+    ])
+    if (vitalsRes.ok) {
+      const data = await vitalsRes.json()
+      vitalsSamples = data.samples ?? []
+    }
+    if (uptimeRes.ok) {
+      const data = await uptimeRes.json()
+      uptimePct = data.availability_pct ?? 100
+      uptimeSegments = data.segments ?? []
+    }
+  }
 
   async function loadAgent() {
     const res = await fetch('/api/fleet')
@@ -53,6 +74,7 @@
 
   onMount(() => {
     void loadAgent()
+    void loadHistory()
     const es = new EventSource('/api/events')
     es.addEventListener('agent', (ev) => {
       const updated = JSON.parse((ev as MessageEvent).data) as AgentState
@@ -138,8 +160,28 @@
         {#if agent.vitals}
           <div class="mt-4 border-t border-surface-border pt-4">
             <VitalsBar vitals={agent.vitals} />
+            {#if vitalsSamples.length > 0}
+              <div class="mt-4 grid grid-cols-3 gap-4 text-xs">
+                <div>
+                  <div class="mb-1 text-gray-500">Temp 24h</div>
+                  <Sparkline values={vitalsSamples.map(s => s.cpu_temp_c)} color="#f97316" />
+                </div>
+                <div>
+                  <div class="mb-1 text-gray-500">Mem 24h</div>
+                  <Sparkline values={vitalsSamples.map(s => s.mem_used_pct)} color="#3b82f6" />
+                </div>
+                <div>
+                  <div class="mb-1 text-gray-500">Disk 24h</div>
+                  <Sparkline values={vitalsSamples.map(s => s.disk_used_pct)} color="#a855f7" />
+                </div>
+              </div>
+            {/if}
           </div>
         {/if}
+      </section>
+
+      <section class="rounded-lg border border-surface-border bg-surface-raised p-4">
+        <UptimeBar availability_pct={uptimePct} segments={uptimeSegments} />
       </section>
 
       {#if agent.session_stats}

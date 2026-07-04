@@ -1,6 +1,7 @@
 import { getConfig } from './config'
 import { inferJourneyFromLogs } from './journey'
-import { sshExecScript } from './ssh'
+import { ingestProbeResult, ingestOfflineStatus } from './ingest'
+import { sshExec, sshExecScript } from './ssh'
 import type { AgentState, AgentStatus, AgentVitals, TailscalePeer } from '$lib/types'
 
 export const PROBE_SCRIPT = `echo '===SERVICES'
@@ -116,6 +117,7 @@ export async function probeAgent(peer: TailscalePeer): Promise<AgentState> {
 
   if (!peer.online) {
     base.status = 'OFFLINE'
+    ingestOfflineStatus(peer.host, 'OFFLINE', now)
     return base
   }
 
@@ -128,6 +130,7 @@ export async function probeAgent(peer: TailscalePeer): Promise<AgentState> {
     if (code !== 0 && !stdout.includes('===SERVICES')) {
       base.probe_error = stderr.trim() || `SSH probe exited with code ${code}`
       base.status = 'UNREACHABLE'
+      ingestProbeResult(base, '')
       return base
     }
 
@@ -147,11 +150,14 @@ export async function probeAgent(peer: TailscalePeer): Promise<AgentState> {
     base.session_stats = session_stats
     base.status = deriveStatus(peer.online, null, cage)
 
+    ingestProbeResult(base, parsed.log)
+
     return base
   }
   catch (err) {
     base.probe_error = err instanceof Error ? err.message : String(err)
     base.status = 'UNREACHABLE'
+    ingestProbeResult(base, '')
     return base
   }
 }

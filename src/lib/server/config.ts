@@ -27,11 +27,8 @@ const envSchema = z.object({
   ALERT_ERROR_STREAK: z.coerce.number().default(3),
   ALERT_CPU_TEMP_C: z.coerce.number().default(80),
   ALERT_DEBOUNCE_MIN: z.coerce.number().default(60),
-  CLICKHOUSE_URL: z.string().optional(),
-  CLICKHOUSE_USER: z.string().optional(),
-  CLICKHOUSE_PASSWORD: z.string().optional(),
-  CLICKHOUSE_DATABASE: z.string().default('default'),
-  CLICKHOUSE_TABLE: z.string().default('app_logs_etl'),
+  SQLITE_PATH: z.string().default('./data/snapdash.db'),
+  HISTORY_RETENTION_DAYS: z.coerce.number().default(90),
 })
 
 export type Config = z.infer<typeof envSchema>
@@ -53,7 +50,3 @@ export function assertValidHost(host: string): void {
   }
 }
 
-export function isClickHouseConfigured(): boolean {
-  const cfg = getConfig()
-  return Boolean(cfg.CLICKHOUSE_URL && cfg.CLICKHOUSE_USER && cfg.CLICKHOUSE_PASSWORD)
-}

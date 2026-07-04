@@ -48,6 +48,7 @@ export interface LogEntry {
   level: string
   detail: string
   custom: Record<string, unknown>
+  host?: string
   raw?: string
 }
 
@@ -107,6 +108,39 @@ export interface FleetHistory {
   journeys_per_day: HistoryDayStat[]
   step_stats: HistoryStepStat[]
   top_errors: HistoryErrorStat[]
+}
+
+export interface VersionChange {
+  host: string
+  at: string
+  app_version: string
+}
+
+export interface VitalsSample {
+  host: string
+  at: string
+  cpu_temp_c: number
+  mem_used_pct: number
+  disk_used_pct: number
+  load1: number
+}
+
+export interface UptimeSegment {
+  status: string
+  start_at: string
+  end_at: string
+  duration_ms: number
+}
+
+export interface JourneyRecord {
+  id: number
+  journey_id: string | null
+  host: string
+  started_at: string
+  ended_at: string | null
+  is_ok: boolean | null
+  duration_s: number | null
+  steps: Record<string, string>
 }
 
 export interface TailscaleDiscoveryError {
