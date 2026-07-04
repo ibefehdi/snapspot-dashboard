@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AgentState } from '$lib/types'
+  import type { AgentState, SuppliesStatus } from '$lib/types'
   import StepIndicator from './StepIndicator.svelte'
   import VitalsBar from './VitalsBar.svelte'
   import LogsPanel from './LogsPanel.svelte'
@@ -14,10 +14,12 @@
   let {
     agent,
     fleetVersion,
+    supplies = null,
     onOpenLogs,
   }: {
     agent: AgentState
     fleetVersion: string | null
+    supplies?: SuppliesStatus | null
     onOpenLogs?: (host: string) => void
   } = $props()
 
@@ -39,6 +41,12 @@
   {#if drift}
     <span class="mt-2 inline-block rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300" title="Fleet: {fleetVersion} · Agent: {agent.app_version}">
       Version drift
+    </span>
+  {/if}
+
+  {#if supplies?.low_media}
+    <span class="mt-2 ml-1 inline-block rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
+      Low media ({supplies.remaining_pct}%)
     </span>
   {/if}
 

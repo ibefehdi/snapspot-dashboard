@@ -2,7 +2,9 @@
   import { onMount } from 'svelte'
   import type { JourneyRecord } from '$lib/types'
 
-  let journeys = $state<JourneyRecord[]>([])
+  type JourneyWithMontage = JourneyRecord & { montage_url: string | null }
+
+  let journeys = $state<JourneyWithMontage[]>([])
   let hosts = $state<string[]>([])
   let selectedHost = $state('')
   let expandedId = $state<number | null>(null)
@@ -33,14 +35,14 @@
     expandedId = expandedId === id ? null : id
   }
 
-  function statusLabel(j: JourneyRecord) {
+  function statusLabel(j: JourneyWithMontage) {
     if (j.ended_at === null) return 'In progress'
     if (j.is_ok === true) return 'OK'
     if (j.is_ok === false) return 'Failed'
     return 'Unknown'
   }
 
-  function statusClass(j: JourneyRecord) {
+  function statusClass(j: JourneyWithMontage) {
     if (j.ended_at === null) return 'text-blue-400'
     if (j.is_ok === true) return 'text-emerald-400'
     if (j.is_ok === false) return 'text-red-400'
@@ -110,6 +112,19 @@
                 </span>
               {/each}
             </div>
+            {#if journey.montage_url}
+              <div class="mt-4">
+                <h4 class="mb-2 text-sm font-medium text-gray-400">Montage</h4>
+                <a href={journey.montage_url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={journey.montage_url}
+                    alt="Montage for {journey.journey_id}"
+                    loading="lazy"
+                    class="max-h-64 rounded border border-surface-border object-contain"
+                  />
+                </a>
+              </div>
+            {/if}
           </div>
         {/if}
       </div>

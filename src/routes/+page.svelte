@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import type { AgentState, AlertRecord, AgentStatus } from '$lib/types'
+  import type { AgentState, SuppliesStatus } from '$lib/types'
   import AgentCard from '$lib/components/AgentCard.svelte'
   import AlertBell from '$lib/components/AlertBell.svelte'
   import { computeSummary } from '$lib/utils'
@@ -11,6 +11,7 @@
   let filterStatus = $state<AgentStatus | 'ALL'>('ALL')
   let search = $state('')
   let sortBy = $state<'host' | 'status'>('host')
+  let suppliesByHost = $state<Map<string, SuppliesStatus>>(new Map())
 
   const summary = $derived(computeSummary(agents))
   const fleetVersion = $derived(summary.fleet_version)
@@ -41,6 +42,16 @@
     void fetch('/api/alerts')
       .then(r => r.json())
       .then(data => { alerts = data.alerts ?? [] })
+
+    void fetch('/api/supplies')
+      .then(r => r.json())
+      .then((data) => {
+        const map = new Map<string, SuppliesStatus>()
+        for (const s of (data.supplies as SuppliesStatus[] | undefined) ?? []) {
+          map.set(s.host, s)
+        }
+        suppliesByHost = map
+      })
 
     const es = new EventSource('/api/events')
 
@@ -120,7 +131,7 @@
 {:else}
   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {#each filtered as agent (agent.host)}
-      <AgentCard {agent} {fleetVersion} />
+      <AgentCard {agent} {fleetVersion} supplies={suppliesByHost.get(agent.host) ?? null} />
     {/each}
   </div>
 {/if}

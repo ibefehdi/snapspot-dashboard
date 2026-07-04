@@ -52,6 +52,8 @@ Production uses `server.js`, which wraps the SvelteKit handler and adds WebSocke
 | `ALERT_CPU_TEMP_C` | `80` | CPU temp threshold (°C) |
 | `SQLITE_PATH` | `./data/snapdash.db` | Local SQLite database path |
 | `HISTORY_RETENTION_DAYS` | `90` | Days of history to retain |
+| `CURRENCY` | — | Currency prefix for revenue display (e.g. `SAR`, `$`) |
+| `PRINT_ROLL_CAPACITY` | `700` | Default media roll capacity for supplies estimation |
 
 ## Features
 
@@ -62,6 +64,9 @@ Production uses `server.js`, which wraps the SvelteKit handler and adds WebSocke
 - **Camera peek**: MJPEG proxy from ustreamer (direct or via SSH tunnel)
 - **Alerts**: ntfy/Telegram for offline, app down, error streaks, high CPU temp (persisted in SQLite)
 - **History**: fleet-wide charts (journeys/day, step success rates, top errors, version rollout)
+- **Revenue dashboard**: daily revenue, conversion funnel, peak-hour heatmap, payment methods, per-agent earnings
+- **Photo gallery**: browse recent montage prints proxied from agents over SSH (with local cache)
+- **Printer supplies**: media roll usage estimation with low-media alerts and reload tracking
 - **Journey explorer**: browse individual journeys with per-step breakdown
 - **Log search**: full-text search across ingested fleet logs
 - **Vitals sparklines**: 24h CPU/memory/disk trends per agent

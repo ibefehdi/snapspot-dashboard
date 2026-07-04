@@ -147,3 +147,68 @@ export interface TailscaleDiscoveryError {
   message: string
   at: string
 }
+
+export interface RevenueDayStat {
+  date: string
+  paid_sessions: number
+  free_sessions: number
+  revenue: number
+}
+
+export interface RevenueFunnel {
+  started: number
+  paid: number
+  completed: number
+}
+
+export interface HeatmapCell {
+  weekday: number
+  hour: number
+  count: number
+}
+
+export interface PaymentMethodStat {
+  method: string
+  count: number
+}
+
+export interface HostRevenueStat {
+  host: string
+  paid_sessions: number
+  revenue: number
+}
+
+export interface RevenueReport {
+  revenue_per_day: RevenueDayStat[]
+  funnel: RevenueFunnel
+  heatmap: HeatmapCell[]
+  payment_methods: PaymentMethodStat[]
+  by_host: HostRevenueStat[]
+  currency: string
+}
+
+export interface GalleryItem {
+  host: string
+  journey_id: string
+  datetime: string
+  filepath: string
+  printer_model: string | null
+}
+
+export interface MediaState {
+  host: string
+  roll_capacity: number
+  reloaded_at: string
+}
+
+export interface SuppliesStatus {
+  host: string
+  printer_model: string | null
+  print_size: string | null
+  roll_capacity: number
+  prints_used: number
+  remaining: number
+  remaining_pct: number
+  reloaded_at: string
+  low_media: boolean
+}

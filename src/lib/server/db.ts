@@ -1,9 +1,9 @@
 import Database from 'better-sqlite3'
-import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { getConfig } from './config'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 let db: Database.Database | null = null
 
@@ -97,6 +97,13 @@ const MIGRATIONS: Record<number, string> = {
       last_version TEXT
     );
   `,
+  2: `
+    CREATE TABLE media_state (
+      host TEXT PRIMARY KEY,
+      roll_capacity INTEGER NOT NULL,
+      reloaded_at TEXT NOT NULL
+    );
+  `,
 }
 
 function runMigrations(database: Database.Database) {
@@ -148,9 +155,42 @@ export function closeDb() {
   }
 }
 
+export function getMontageCacheDir(): string {
+  const cfg = getConfig()
+  const base = cfg.SQLITE_PATH === ':memory:' ? './data/cache/montages' : join(dirname(cfg.SQLITE_PATH), 'cache', 'montages')
+  return base
+}
+
+function pruneMontageCache(cutoffMs: number) {
+  const cacheDir = getMontageCacheDir()
+  try {
+    const hosts = readdirSync(cacheDir)
+    for (const host of hosts) {
+      const hostDir = join(cacheDir, host)
+      try {
+        const files = readdirSync(hostDir)
+        for (const file of files) {
+          const filePath = join(hostDir, file)
+          const mtime = statSync(filePath).mtimeMs
+          if (mtime < cutoffMs) {
+            rmSync(filePath, { force: true })
+          }
+        }
+      }
+      catch {
+        // ignore per-host errors
+      }
+    }
+  }
+  catch {
+    // cache dir may not exist yet
+  }
+}
+
 export function pruneOldData() {
   const cfg = getConfig()
   const cutoff = new Date(Date.now() - cfg.HISTORY_RETENTION_DAYS * 86400000).toISOString()
+  const cutoffMs = Date.now() - cfg.HISTORY_RETENTION_DAYS * 86400000
   const database = getDb()
 
   database.prepare('DELETE FROM log_events WHERE datetime < ?').run(cutoff)
@@ -159,6 +199,7 @@ export function pruneOldData() {
   database.prepare('DELETE FROM status_changes WHERE at < ?').run(cutoff)
   database.prepare('DELETE FROM version_changes WHERE at < ?').run(cutoff)
   database.prepare('DELETE FROM alerts WHERE at < ?').run(cutoff)
+  pruneMontageCache(cutoffMs)
 }
 
 let pruneTimer: ReturnType<typeof setInterval> | null = null

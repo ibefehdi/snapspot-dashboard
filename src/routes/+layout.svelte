@@ -15,6 +15,8 @@ let { children } = $props()
       <nav class="flex gap-4 text-sm text-gray-400">
         <a href="/" class="hover:text-white">Fleet</a>
         <a href="/history" class="hover:text-white">History</a>
+        <a href="/revenue" class="hover:text-white">Revenue</a>
+        <a href="/gallery" class="hover:text-white">Gallery</a>
         <a href="/journeys" class="hover:text-white">Journeys</a>
         <a href="/search" class="hover:text-white">Search</a>
       </nav>

@@ -33,6 +33,8 @@ const envSchema = z.object({
   ALERT_DEBOUNCE_MIN: z.coerce.number().default(60),
   SQLITE_PATH: z.string().default('./data/snapdash.db'),
   HISTORY_RETENTION_DAYS: z.coerce.number().default(90),
+  CURRENCY: z.string().default(''),
+  PRINT_ROLL_CAPACITY: z.coerce.number().default(700),
 })
 
 export type Config = z.infer<typeof envSchema>

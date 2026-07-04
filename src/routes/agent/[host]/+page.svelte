@@ -10,6 +10,8 @@
   import CameraPeek from '$lib/components/CameraPeek.svelte'
   import type { Component } from 'svelte'
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte'
+  import SuppliesCard from '$lib/components/SuppliesCard.svelte'
+  import type { SuppliesStatus } from '$lib/types'
   import {
     formatElapsed,
     hasVersionDrift,
@@ -40,11 +42,14 @@
   let vitalsSamples = $state<VitalsSample[]>([])
   let uptimePct = $state(100)
   let uptimeSegments = $state<UptimeSegment[]>([])
+  let supplies = $state<SuppliesStatus | null>(null)
+  let confirmReload = $state(false)
 
   async function loadHistory() {
-    const [vitalsRes, uptimeRes] = await Promise.all([
+    const [vitalsRes, uptimeRes, suppliesRes] = await Promise.all([
       fetch(`/api/agents/${host}/vitals?hours=24`),
       fetch(`/api/agents/${host}/uptime?days=7`),
+      fetch(`/api/supplies?host=${encodeURIComponent(host)}`),
     ])
     if (vitalsRes.ok) {
       const data = await vitalsRes.json()
@@ -54,6 +59,21 @@
       const data = await uptimeRes.json()
       uptimePct = data.availability_pct ?? 100
       uptimeSegments = data.segments ?? []
+    }
+    if (suppliesRes.ok) {
+      const data = await suppliesRes.json()
+      supplies = (data.supplies as SuppliesStatus[] | undefined)?.[0] ?? null
+    }
+  }
+
+  async function markMediaReloaded() {
+    const res = await fetch(`/api/agents/${host}/media`, { method: 'POST' })
+    if (res.ok) {
+      await loadHistory()
+      actionMessage = 'Media reload recorded'
+    }
+    else {
+      actionError = 'Failed to record media reload'
     }
   }
 
@@ -193,6 +213,12 @@
         <UptimeBar availability_pct={uptimePct} segments={uptimeSegments} />
       </section>
 
+      {#if supplies}
+        <section class="rounded-lg border border-surface-border bg-surface-raised p-4">
+          <SuppliesCard {supplies} onReload={() => { confirmReload = true }} />
+        </section>
+      {/if}
+
       {#if agent.session_stats}
         <section class="rounded-lg border border-surface-border bg-surface-raised p-4">
           <h2 class="mb-3 font-semibold text-white">Recent session stats</h2>
@@ -234,5 +260,13 @@
     confirmText="Reboot"
     requireTyped={host}
     onConfirm={() => runAction('reboot')}
+  />
+
+  <ConfirmDialog
+    bind:open={confirmReload}
+    title="Mark media reloaded"
+    message="Reset the print counter for {host}. Only do this after installing a new media roll."
+    confirmText="Mark reloaded"
+    onConfirm={() => markMediaReloaded()}
   />
 {/if}
