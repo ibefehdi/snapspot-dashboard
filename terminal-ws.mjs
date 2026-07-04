@@ -1,0 +1,69 @@
+import { WebSocketServer } from 'ws'
+
+const HOSTNAME_RE = /^[a-z0-9-]+$/
+const SSH_USER = process.env.SSH_USER ?? 'snapspot'
+
+const wss = new WebSocketServer({ noServer: true })
+
+function buildSshArgs(host) {
+  const args = [
+    '-o', 'BatchMode=yes',
+    '-o', 'ConnectTimeout=5',
+    '-o', 'StrictHostKeyChecking=accept-new',
+  ]
+  if (process.env.SSH_USE_CONTROL_MASTER !== 'false' && process.platform !== 'win32') {
+    args.push('-o', 'ControlMaster=auto', '-o', 'ControlPath=/tmp/snapdash-%r@%h', '-o', 'ControlPersist=120')
+  }
+  args.push('-t', `${SSH_USER}@${host}`)
+  return args
+}
+
+function attachPty(ws, host) {
+  import('node-pty').then(({ spawn: ptySpawn }) => {
+    const sshArgs = ['ssh', ...buildSshArgs(host)]
+    const pty = ptySpawn(sshArgs[0], sshArgs.slice(1), {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      env: process.env,
+    })
+
+    pty.onData(data => {
+      if (ws.readyState === ws.OPEN) ws.send(data)
+    })
+    pty.onExit(() => ws.close())
+
+    ws.on('message', (data) => {
+      const text = data.toString()
+      try {
+        const msg = JSON.parse(text)
+        if (msg.type === 'resize' && msg.cols && msg.rows) {
+          pty.resize(msg.cols, msg.rows)
+          return
+        }
+      }
+      catch { /* raw input */ }
+      pty.write(text)
+    })
+
+    ws.on('close', () => pty.kill())
+  }).catch((err) => {
+    ws.send(`\r\nFailed to start terminal: ${err.message}\r\n`)
+    ws.close()
+  })
+}
+
+export function handleTerminalUpgrade(req, socket, head) {
+  const url = new URL(req.url ?? '', `http://${req.headers.host ?? 'localhost'}`)
+  const host = url.searchParams.get('host')
+
+  if (!host || !HOSTNAME_RE.test(host)) {
+    socket.destroy()
+    return
+  }
+
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req)
+    attachPty(ws, host)
+  })
+}
