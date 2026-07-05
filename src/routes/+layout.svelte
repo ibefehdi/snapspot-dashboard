@@ -17,6 +17,7 @@ let { children } = $props()
         <a href="/history" class="hover:text-white">History</a>
         <a href="/revenue" class="hover:text-white">Revenue</a>
         <a href="/gallery" class="hover:text-white">Gallery</a>
+        <a href="/gallery/sync" class="hover:text-white">Sync</a>
         <a href="/journeys" class="hover:text-white">Journeys</a>
         <a href="/search" class="hover:text-white">Search</a>
       </nav>

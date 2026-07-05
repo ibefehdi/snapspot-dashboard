@@ -35,11 +35,25 @@ const envSchema = z.object({
   HISTORY_RETENTION_DAYS: z.coerce.number().default(90),
   CURRENCY: z.string().default(''),
   PRINT_ROLL_CAPACITY: z.coerce.number().default(700),
+  REDIS_URL: z.string().default('redis://127.0.0.1:6379'),
+  GALLERY_SYNC_ENABLED: z
+    .string()
+    .default('false')
+    .transform(v => v === 'true' || v === '1'),
+  AWS_REGION: z.string().default(''),
+  AWS_ACCESS_KEY_ID: z.string().default(''),
+  AWS_SECRET_ACCESS_KEY: z.string().default(''),
+  S3_BUCKET: z.string().default(''),
+  S3_PREFIX: z.string().default(''),
 })
 
 export type Config = z.infer<typeof envSchema>
 
 let cached: Config | null = null
+
+export function resetConfig(): void {
+  cached = null
+}
 
 export function getConfig(): Config {
   if (!cached) {
@@ -54,5 +68,13 @@ export function assertValidHost(host: string): void {
   if (!HOSTNAME_RE.test(host)) {
     throw new Error(`Invalid hostname: ${host}`)
   }
+}
+
+export function isGallerySyncEnabled(): boolean {
+  const cfg = getConfig()
+  return cfg.GALLERY_SYNC_ENABLED
+    && Boolean(cfg.S3_BUCKET)
+    && Boolean(cfg.AWS_REGION)
+    && Boolean(cfg.REDIS_URL)
 }
 

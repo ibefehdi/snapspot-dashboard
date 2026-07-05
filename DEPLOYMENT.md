@@ -361,7 +361,7 @@ Replace `dashboard.yourdomain.com` with your domain (or VPS IP for HTTP-only):
 sudo tee /etc/nginx/sites-available/snapspot-dashboard << 'EOF'
 server {
     listen 80;
-    server_name dashboard.yourdomain.com;
+    server_name dashboard.ibefehdi.com;
 
     location / {
         auth_basic "SnapSpot Fleet";
@@ -394,7 +394,7 @@ sudo systemctl reload nginx
 ### 7d. HTTPS with Let's Encrypt
 
 ```bash
-sudo certbot --nginx -d dashboard.yourdomain.com
+sudo certbot --nginx -d dashboard.ibefehdi.com
 ```
 
 Certbot updates the nginx config for HTTPS automatically.
@@ -511,7 +511,155 @@ journalctl -u snapspot-dashboard --since "1 hour ago"
 
 ---
 
-## 11. Development setup (Mac or Windows)
+## 11. Optional: gallery S3 sync
+
+The photo gallery can cache montage images in **AWS S3** and track sync state in **Redis**. An hourly systemd timer fetches montages from **online** agents over SSH and uploads them to S3 at `{host}/{journey_id}.png`. The gallery API serves from S3 first and falls back to SSH when an image is not yet synced.
+
+### 11a. Install Redis
+
+```bash
+sudo apt install -y redis-server
+sudo systemctl enable --now redis-server
+```
+
+Redis should listen on `127.0.0.1:6379` (default). Verify:
+
+```bash
+redis-cli ping
+# PONG
+```
+
+### 11b. Create S3 bucket and IAM credentials
+
+1. Create a private S3 bucket (e.g. `snapspot-gallery`) in your preferred AWS region.
+2. Create an IAM user or role with this policy (replace `BUCKET_NAME`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:HeadObject"],
+      "Resource": "arn:aws:s3:::BUCKET_NAME/*"
+    }
+  ]
+}
+```
+
+3. Generate access keys for the IAM user.
+
+Object layout in the bucket:
+
+```
+chilly-hands/j1.png
+chilly-hands/j2.png
+other-agent/abc123.png
+```
+
+Optional `S3_PREFIX` env var prepends a folder (e.g. `gallery/chilly-hands/j1.png`).
+
+### 11c. Configure environment
+
+Add to `/home/fehdi/snapspot-dashboard/.env`:
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379
+GALLERY_SYNC_ENABLED=true
+AWS_REGION=eu-central-1
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+S3_BUCKET=snapspot-gallery
+S3_PREFIX=
+```
+
+Restart the dashboard after changing `.env`:
+
+```bash
+sudo systemctl restart snapspot-dashboard
+```
+
+### 11d. Hourly sync timer (systemd)
+
+Create the service unit:
+
+```bash
+sudo tee /etc/systemd/system/snapspot-gallery-sync.service << 'EOF'
+[Unit]
+Description=SnapSpot gallery S3 sync
+After=network-online.target redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=fehdi
+WorkingDirectory=/home/fehdi/snapspot-dashboard
+EnvironmentFile=/home/fehdi/snapspot-dashboard/.env
+ExecStart=/usr/bin/npm run sync:gallery
+EOF
+```
+
+Create the timer:
+
+```bash
+sudo tee /etc/systemd/system/snapspot-gallery-sync.timer << 'EOF'
+[Unit]
+Description=Run SnapSpot gallery S3 sync hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now snapspot-gallery-sync.timer
+```
+
+### 11e. Verify sync
+
+Run a manual sync (loads `.env` from the project root automatically):
+
+```bash
+cd ~/snapspot-dashboard
+npm run sync:gallery
+```
+
+If you run the script outside npm, ensure `.env` is loaded (systemd does this via `EnvironmentFile`).
+
+Expected output:
+
+```
+Gallery sync: 2 hosts, 5 uploaded, 10 skipped, 0 failed
+```
+
+Check Redis keys:
+
+```bash
+redis-cli keys 'gallery:s3:*'
+redis-cli get 'gallery:sync:last:chilly-hands'
+```
+
+Check S3 objects in the AWS console or with `aws s3 ls s3://snapspot-gallery/`.
+
+Open the gallery page — images should load from S3 (no SSH delay for synced montages).
+
+View timer logs:
+
+```bash
+journalctl -u snapspot-gallery-sync.service -n 50 --no-pager
+systemctl list-timers snapspot-gallery-sync.timer
+```
+
+---
+
+## 12. Development setup (Mac or Windows)
 
 For local dev without systemd:
 
@@ -545,6 +693,8 @@ Ensure Tailscale is running and `tailscale status` works from the same shell.
 | Camera peek fails | ustreamer binds to `127.0.0.1:8081` on agents — dashboard falls back to SSH curl; ensure SSH works |
 | Remote actions fail | Agent sudo rules for `systemctl restart/reboot` |
 | History empty | Wait 2–3 probe cycles (~90s). Check `data/snapdash.db` exists and is writable |
+| Gallery images slow | Enable S3 sync (section 11). Check `npm run sync:gallery` and Redis keys `gallery:s3:*` |
+| Gallery sync fails | `journalctl -u snapspot-gallery-sync.service`. Verify AWS credentials, bucket name, and agent SSH |
 | Node version errors | Must be Node 20: `node -v` → `v20.x` |
 
 ### Useful debug commands

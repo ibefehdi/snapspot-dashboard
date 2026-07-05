@@ -31,7 +31,10 @@
 </script>
 
 <h1 class="mb-2 text-2xl font-bold text-white">Photo Gallery</h1>
-<p class="mb-6 text-sm text-gray-400">Recent montage prints fetched from agents over SSH</p>
+<p class="mb-6 text-sm text-gray-400">
+  Montages cached from S3; fetched from agents on demand.
+  <a href="/gallery/sync" class="text-blue-400 hover:text-blue-300">View sync status →</a>
+</p>
 
 <div class="mb-6">
   <label class="flex items-center gap-2 text-sm text-gray-400">

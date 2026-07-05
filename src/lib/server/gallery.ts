@@ -3,6 +3,9 @@ import { join } from 'node:path'
 import type { GalleryItem } from '$lib/types'
 import { getMontageCacheDir } from './db'
 import { getDb } from './db'
+import { isGallerySyncEnabled } from './config'
+import { isMontageSynced } from './redis'
+import { getMontageStream } from './s3'
 import { sshExec } from './ssh'
 
 export const MONTAGE_PATH_PREFIX = '/home/snapspot/.local/share/com.snapspot.dev/images/'
@@ -104,7 +107,7 @@ export function fetchMontageByJourney(host: string, journeyId: string): GalleryI
   }
 }
 
-export async function fetchMontageImage(
+export async function fetchMontageFromAgent(
   host: string,
   filepath: string,
   journeyId: string,
@@ -129,4 +132,23 @@ export async function fetchMontageImage(
   writeFileSync(cachePath, buffer)
 
   return { stream: createReadStream(cachePath), fromCache: false }
+}
+
+export async function fetchMontageImage(
+  host: string,
+  filepath: string,
+  journeyId: string,
+): Promise<{ stream: ReturnType<typeof createReadStream>; fromCache: boolean; fromS3?: boolean }> {
+  if (!validateMontagePath(filepath)) {
+    throw new Error('Invalid montage path')
+  }
+
+  if (isGallerySyncEnabled() && await isMontageSynced(host, journeyId)) {
+    const s3Stream = await getMontageStream(host, journeyId)
+    if (s3Stream) {
+      return { stream: s3Stream as ReturnType<typeof createReadStream>, fromCache: false, fromS3: true }
+    }
+  }
+
+  return fetchMontageFromAgent(host, filepath, journeyId)
 }
