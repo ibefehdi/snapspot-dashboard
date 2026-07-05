@@ -9,6 +9,7 @@ export function getRedis(): Redis | null {
     const cfg = getConfig()
     client = new Redis(cfg.REDIS_URL, {
       maxRetriesPerRequest: 3,
+      connectTimeout: 5000,
       lazyConnect: true,
     })
   }
@@ -83,6 +84,21 @@ export async function isSyncRunning(): Promise<boolean> {
   if (!redis) return false
   const exists = await redis.exists(SYNC_LOCK_KEY)
   return exists === 1
+}
+
+export async function getSyncLockTtl(): Promise<number | null> {
+  const redis = getRedis()
+  if (!redis) return null
+  const ttl = await redis.ttl(SYNC_LOCK_KEY)
+  if (ttl < 0) return null
+  return ttl
+}
+
+export async function clearSyncLock(): Promise<boolean> {
+  const redis = getRedis()
+  if (!redis) return false
+  const removed = await redis.del(SYNC_LOCK_KEY)
+  return removed === 1
 }
 
 export async function getSyncLastRun(): Promise<string | null> {

@@ -6,6 +6,7 @@
   let error = $state<string | null>(null)
   let loading = $state(true)
   let syncing = $state(false)
+  let syncMessage = $state<string | null>(null)
 
   async function load() {
     loading = true
@@ -25,6 +26,7 @@
   async function runSync() {
     syncing = true
     error = null
+    syncMessage = null
     const res = await fetch('/api/gallery/sync', { method: 'POST' })
     const data = await res.json()
     if (!res.ok) {
@@ -32,8 +34,28 @@
     }
     else {
       status = data.status
+      const r = data.result
+      if (r) {
+        syncMessage = `${r.uploaded} uploaded, ${r.skipped} skipped, ${r.failed} failed`
+        if (r.errors?.length > 0) {
+          error = r.errors.join('\n')
+        }
+      }
     }
     syncing = false
+  }
+
+  async function clearLock() {
+    error = null
+    syncMessage = null
+    const res = await fetch('/api/gallery/sync', { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) {
+      error = data.error ?? 'Failed to clear lock'
+      return
+    }
+    status = data.status
+    syncMessage = data.cleared ? 'Sync lock cleared' : 'No lock was held'
   }
 
   onMount(() => {
@@ -72,6 +94,9 @@
       <p class="mt-1 text-lg font-medium text-white">
         {#if status.running}
           <span class="text-blue-400">Syncing…</span>
+          {#if status.lock_ttl_sec !== null}
+            <span class="ml-1 text-sm text-gray-500">(lock {status.lock_ttl_sec}s left)</span>
+          {/if}
         {:else}
           Idle
         {/if}
@@ -91,6 +116,13 @@
     </div>
   </div>
 
+  {#if status.running && !status.last_run_at}
+    <div class="mb-6 rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+      A sync lock is held but no run has finished yet. This may be a long run (many montages over SSH),
+      or a stale lock from a crashed process. If uploads are not progressing, use <strong>Clear lock</strong> then run sync from the server with <code class="text-amber-100">npm run sync:gallery</code> to see errors.
+    </div>
+  {/if}
+
   <div class="mb-6 flex flex-wrap gap-3">
     <button
       type="button"
@@ -99,6 +131,14 @@
       onclick={() => runSync()}
     >
       {syncing ? 'Running sync…' : 'Run sync now'}
+    </button>
+    <button
+      type="button"
+      class="rounded border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+      disabled={syncing}
+      onclick={() => clearLock()}
+    >
+      Clear lock
     </button>
     <button
       type="button"
@@ -129,8 +169,12 @@
     </div>
   {/if}
 
+  {#if syncMessage}
+    <p class="mb-4 text-sm text-gray-300">{syncMessage}</p>
+  {/if}
+
   {#if error}
-    <p class="mb-4 text-sm text-red-400">{error}</p>
+    <pre class="mb-4 overflow-x-auto rounded border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200 whitespace-pre-wrap">{error}</pre>
   {/if}
 
   <h2 class="mb-3 text-lg font-medium text-white">Per agent</h2>

@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
 import { fetchGallerySyncStatus, runGallerySync } from '$lib/server/gallery-sync'
+import { clearSyncLock } from '$lib/server/redis'
 
 export async function GET() {
   try {
@@ -10,6 +11,7 @@ export async function GET() {
     return json({
       enabled: false,
       running: false,
+      lock_ttl_sec: null,
       last_run_at: null,
       next_run_at: null,
       last_result: null,
@@ -28,6 +30,19 @@ export async function POST() {
   catch (err) {
     return json({
       error: err instanceof Error ? err.message : 'Sync failed',
+    }, { status: 500 })
+  }
+}
+
+export async function DELETE() {
+  try {
+    const cleared = await clearSyncLock()
+    const status = await fetchGallerySyncStatus()
+    return json({ cleared, status })
+  }
+  catch (err) {
+    return json({
+      error: err instanceof Error ? err.message : 'Failed to clear sync lock',
     }, { status: 500 })
   }
 }
